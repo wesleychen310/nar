@@ -1,0 +1,491 @@
+use ACDB
+
+------------------------------------------------------------BASIC------------------------------------------------------------
+DROP TABLE IF EXISTS ##T0 DROP TABLE IF EXISTS ##T1 DROP TABLE IF EXISTS ##T2 DROP TABLE IF EXISTS ##T3  DROP TABLE IF EXISTS ##T
+SELECT B.POLPLN,B.ZPLONGC PD,'             ' TYP,left(crrcd,4) yy ,A.* INTO ##T0  from  LASUC A LEFT OUTER JOIN UCFO B ON A.CRTABLE=B.POLPLN 
+where LEFT(PTYPE3,1) in ('L')  and RISKSTATUS IN ('IF','DH','SU','LA','NP','NT','AI','FL') and  crrcd>=20180101    --lifeid = 'A203942740' --   AND PTYPE1='M'                    -- lifeid = 'A203942740'--------輸入保單號 chdrnum = 'PLANCODE'或ID lifeid = 'ID NUMBER'
+
+
+SELECT B.NAGNTNAM CH,A.* INTO ##T1 FROM ##T0 A LEFT OUTER JOIN UC01 B ON A.CHDRNUM=B.CHDRNUM 
+DROP TABLE IF EXISTS ##T0 
+
+SELECT CAST(B.TARGET_RATE/100 AS decimal(9,2)) 危額係數,A.* INTO ##T2 FROM ##T1 A LEFT OUTER JOIN TZ502 B ON A.crtable=left(B.ITEM,4) and Right('00' + CAST( A.pay_year AS VARCHAR(2)), 2) = SUBSTRING(B.ITEM,5,2) and Right('00' + CAST( A.lifeage AS VARCHAR(2)), 2) = right(B.ITEM, 2)
+DROP TABLE IF EXISTS ##T1
+
+
+SELECT B.NAME BRA,A.* INTO ##T3 FROM ##T2 A LEFT OUTER JOIN BA_AREA  B ON A.CHDRNUM=B.CHDRNUM 
+DROP TABLE IF EXISTS ##T2
+
+SELECT B.OPCDA01,B.ZMORTPCT01 TM,A.* INTO ##T FROM ##T3 A LEFT OUTER JOIN COVRA  B ON A.CHDRNUM=B.CHDRNUM AND A.LIFE=B.LIFE AND A.COVERAGE=B.COVERAGE
+DROP TABLE IF EXISTS ##T3
+------------------------------------------------------------加入新欄位---------------------------------------------------------------------------
+ALTER TABLE ##T 
+ADD 
+    FX DECIMAL(4,2), P DECIMAL (9,0),SA DECIMAL (9,0) ,期滿PTD VARCHAR(8), y_ptd decimal (3,1),y_cur decimal (3,1),y decimal (3,1), y_NOW DECIMAL(4,2), EX　VARCHAR(1),SUB VARCHAR(1),TM_GR VARCHAR(9),NAR_GR VARCHAR(9),AGE_GR  VARCHAR(5),融通 VARCHAR(1) 
+	--##T後面加入欄位 FX, P, SA, 滿期PTD, y_ptd, y_cur, y, EX, SUB, TM_GR, NAR_GR, AGE_GR, 融通 VARCHAR為控制字串長度
+
+--====================================================================迴圈加入新欄位(IF,Q,D,E,NAR,ENAR,ANAR)(要一起跑)====================================================================
+--原始CODE: ALTER TABLE ##T ADD IF0  decimal(3,1), IF1 decimal(3,1), IF2 decimal(3,1), IF3 decimal(3,1), IF4  decimal(3,1), IF5  decimal(3,1), IF6 decimal(3,1), IF7 decimal(3,1), IF8 decimal(3,1), IF9 decimal(3,1), IF10 decimal(3,1), IF11 decimal(3,1), IF12 decimal(3,1), IF13 decimal(3,1), IF14 decimal(3,1), IF15 decimal(3,1)
+--其餘欄位一樣方法
+
+Declare @sql NVARCHAR(MAX) = 'ALTER TABLE ##T ADD '
+Declare @i INT
+
+-----------------------------------ADD 'IF'
+SET @i = 0
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'IF' + CAST(@i AS NVARCHAR) + ' DECIMAL(3, 1), '
+	SET @i =@i + 1
+END
+
+-----------------------------------ADD 'Q'
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'Q' + CAST(@i AS NVARCHAR) + ' DECIMAL(7, 6), '
+	SET @i =@i + 1
+END
+ 
+-----------------------------------ADD 'D'
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'D' + CAST(@i AS NVARCHAR) + ' DECIMAL(3, 1), '
+	SET @i =@i + 1
+END
+
+-----------------------------------ADD 'E'
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'E' + CAST(@i AS NVARCHAR) + ' DECIMAL(7, 6), '
+	SET @i =@i + 1
+END
+	
+-----------------------------------ADD 'NAR'
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'NAR' + CAST(@i AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i =@i + 1
+END	
+
+-----------------------------------ADD 'ENAR' (預期理賠危額)
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'ENAR' + CAST(@i AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i =@i + 1
+END	
+
+-----------------------------------ADD 'ANAR' (真實理賠危額)
+SET @i = 1
+WHILE @i <= 20
+Begin
+	SET @sql = @sql + 'ANAR' + CAST(@i AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i =@i + 1
+END	
+	
+SET @sql = LEFT(@sql, LEN(@sql) - 1)
+EXEC sp_executesql @sql
+--=======================================================================迴圈加入新欄位(IF,Q,D,E,NAR,ENAR,ANAR)(要一起跑)=====================================================================================================
+--原始CODE: IF0  decimal(3,1), IF1 decimal(3,1), IF2 decimal(3,1), IF3 decimal(3,1), IF4  decimal(3,1), IF5  decimal(3,1), IF6 decimal(3,1), IF7 decimal(3,1), IF8 decimal(3,1), IF9 decimal(3,1), IF10 decimal(3,1), IF11 decimal(3,1), IF12 decimal(3,1), IF13 decimal(3,1), IF14 decimal(3,1), IF15 decimal(3,1)
+--其餘欄位一樣方法
+
+
+------補融通件
+UPDATE ##T SET 融通=0
+UPDATE ##T SET 融通=1,TM=B.TM FROM ##T A JOIN [PUBLICDB].[dbo].[融通次標] B ON A.CHDRNUM =B.CHDRNUM 
+UPDATE ##T SET FX = CASE WHEN CNTCURR = 'AUD' THEN 21 WHEN CNTCURR = 'CNT' THEN 4.5  WHEN CNTCURR = 'NT$' THEN 1 WHEN CNTCURR in ('US$','USD') THEN 30 ELSE 1 END; -- FX為匯率
+UPDATE ##T SET EX= SUBSTRING( HLTCLS,1,1),SUB=SUBSTRING( HLTCLS,2,1)		 --分出各類群  EX是否體檢  SUB判斷次標體
+
+
+
+------保單年度時間
+UPDATE ##T SET 期滿PTD=CONVERT(VARCHAR, DATEADD(YEAR, pay_year, CONVERT(DATE, CRRCD)), 112),SA=nsumins*FX --DATEADD為累加年/月/日(此處為年)
+UPDATE ##T SET P= CASE WHEN PAY_YEAR=1 THEN ninstamt*FX ELSE NANNPREM* FX END --保費
+UPDATE ##T SET y_ptd = CEILING (CAST(PTDATE AS FLOAT) / 10000.0 -  CAST(crrcd AS FLOAT) / 10000.0 ) 
+UPDATE ##T SET y_cur=  CEILING (CAST(currfrom  AS FLOAT) / 10000.0 -  CAST(crrcd AS FLOAT) / 10000.0 ) --currfrom有效起始日
+
+UPDATE ##T SET y=T WHERE PREMSTATUS IN ('FP','ET','PU','SP','WV')  --繳滿FP、展期ET、繳清PU、躉繳SP、豁免WV
+UPDATE ##T SET y=y_ptd WHERE PREMSTATUS IN ('PP','AI','NP','LA')  --續繳PP、墊繳AI、非自動墊繳停效NP、自動墊繳停效LA
+UPDATE ##T SET y=y_ptd WHERE PREMSTATUS IN ('SU','DH','FL','NT') AND PTDATE<期滿PTD  --解約SU、身故DH、違告FL、失效NT
+UPDATE ##T SET y=y_cur WHERE PREMSTATUS IN ('SU','DH','FL','NT') AND PTDATE>=期滿PTD  
+
+--=======================================================================迴圈設定IF、D、E為0(要一起跑)=====================================================================================================
+--原始CODE for IF=0、D=0、E=0: UPDATE ##T SET IF0=1, IF1=0, IF2 =0, IF3 =0, IF4 =0, IF5 =0, IF6=0 , IF7=0, IF8=0, IF9=0, IF10=0, IF11=0, IF12=0, IF13=0, IF14=0, IF15=0,D1 =0, D2 =0, D3 =0, D4 =0, D5 =0, D6=0 , D7=0, D8=0, D9=0, D10=0, D11=0, D12=0, D13=0, D14=0, D15=0,E1 =0, E2 =0, E3 =0, E4 =0, E5 =0, E6=0 , E7=0, E8=0, E9=0, E10=0, E11=0, E12=0, E13=0, E14=0, E15=0
+
+UPDATE ##T SET IF0=1
+
+--新增 字串(命名格式: @sql_Table_欄位名稱0)
+Declare @T_IF0 NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @T_D0 NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @T_E0 NVARCHAR(MAX) = 'UPDATE ##T SET '
+--新增 變數(命名格式: @sql_Table_欄位名稱0)
+Declare @i_T_IF0 INT
+Declare @i_T_D0 INT
+Declare @i_T_E0 INT
+
+
+--迴圈設定 'IF'=0
+SET @i_T_IF0 = 1
+WHILE @i_T_IF0 <= 20
+Begin
+	SET @T_IF0 = @T_IF0 + 'IF' + CAST(@i_T_IF0 AS NVARCHAR)  + ' = 0, '
+	SET @i_T_IF0 =@i_T_IF0 + 1
+END	
+--迴圈設定 'D'=0
+SET @i_T_D0 = 1
+WHILE @i_T_D0 <= 20
+Begin
+	SET @T_D0 = @T_D0 + 'D' + CAST(@i_T_D0 AS NVARCHAR)  + ' = 0, '
+	SET @i_T_D0 =@i_T_D0 + 1
+END
+--迴圈設定 'E'=0
+SET @i_T_E0 = 1
+WHILE @i_T_E0 <= 20
+Begin
+	SET @T_E0 = @T_E0 + 'E' + CAST(@i_T_E0 AS NVARCHAR)  + ' = 0, '
+	SET @i_T_E0 =@i_T_E0 + 1
+END
+
+--調整字串文字(有需要再填)	
+SET @T_IF0 = LEFT(@T_IF0, LEN(@T_IF0) - 1)
+SET @T_D0 = LEFT(@T_D0, LEN(@T_D0) - 1)
+SET @T_E0 = LEFT(@T_E0, LEN(@T_E0) - 1)
+
+EXEC sp_executesql @T_IF0
+EXEC sp_executesql @T_D0
+EXEC sp_executesql @T_E0
+--=======================================================================迴圈設定IF、D、E為0(要一起跑)=====================================================================================================
+
+--==============================================================================迴圈更新IF、D、Q、E欄位數值(要一起跑)==============================================================================
+--原始CODE for IF: UPDATE ##T SET UPDATE ##T SET IF1=1 WHERE Y>1  UPDATE ##T SET IF2=1 WHERE Y>2  UPDATE ##T SET IF3=1 WHERE Y>3  UPDATE ##T SET IF4=1 WHERE Y>4  UPDATE ##T SET IF5=1 WHERE Y>5 UPDATE ##T SET IF6=1 WHERE Y>6
+--原始CODE for D: UPDATE ##T SET D1 = CASE    WHEN Y = 1 AND riskstatus = 'DH' THEN 1     ELSE D1     END,D2 = CASE    WHEN Y = 2 AND riskstatus = 'DH' THEN 1     ELSE D2     END, D3 = CASE    WHEN Y = 3 AND riskstatus = 'DH' THEN 1     ELSE D3     END, D4 = CASE    WHEN Y = 4 AND riskstatus = 'DH' THEN 1     ELSE D4     END, D5 = CASE    WHEN Y = 5 AND riskstatus = 'DH' THEN 1     ELSE D5     END, D6 = CASE    WHEN Y = 6 AND riskstatus = 'DH' THEN 1     ELSE D6     END;
+--原始CODE for Q: UPDATE A SET  q1=B.Q FROM ##T A JOIN  [PUBLICDB].[dbo].[TSO] B ON A.LIFESEX=B.SEX AND  A.LIFEAGE+0=B.AGE 　WHERE B.TSO=6 逐一複寫 (重點: Qt 對應 A.LIFEAGE+(t-1))
+--原始CODE for E: UPDATE ##T SET E1=IF0*Q1, E2=IF1*Q2, E3=IF2*Q3, E4=IF3*Q4, E5=IF4*Q5, E6=IF5*Q6, E7=IF6*Q7, E8=IF7*Q8, E9=IF8*Q9, E10=IF9*Q10, E11=IF10*Q11, E12=IF11*Q12, E13=IF12*Q13, E14=IF13*Q14, E15=IF14*Q15
+
+
+
+--新增 字串(命名格式: @sql_欄位名稱)
+Declare @sql_if NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @sql_D NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @sql_Q NVARCHAR(MAX) = ''
+Declare @sql_E NVARCHAR(MAX) = 'UPDATE ##T SET '
+--新增 變數(命名格式: @i_欄位名稱)
+Declare @i_if INT = 1
+Declare @i_D INT = 1
+Declare @i_Q INT = 1
+Declare @i_E INT = 1
+
+-------迴圈IF
+WHILE @i_if <= 20
+Begin
+	SET @sql_if = @sql_if + 'IF' + CAST(@i_if AS NVARCHAR) + ' = CASE WHEN Y > ' + CAST( @i_if AS NVARCHAR) + ' THEN 1 ELSE 0 END, '
+	SET @i_if = @i_if + 1
+END	
+-------迴圈D
+WHILE @i_D <= 20
+Begin
+	SET @sql_D = @sql_D + 'D' + CAST(@i_D AS NVARCHAR) + ' = CASE WHEN Y = ' + CAST(@i_D AS NVARCHAR) + ' AND riskstatus = ''DH'' THEN 1 ELSE D' + CAST(@i_D AS NVARCHAR) + ' END, '
+	SET @i_D = @i_D + 1
+END	
+-------迴圈Q
+WHILE @i_Q <= 20
+Begin
+	SET @sql_Q = @sql_Q + 'UPDATE A SET ' + 'q' + CAST(@i_Q AS NVARCHAR) + ' =B.Q FROM ##T A JOIN  [PUBLICDB].[dbo].[TSO] B ON A.LIFESEX=B.SEX AND  A.LIFEAGE+ ' + CAST(@i_Q - 1 AS NVARCHAR) + ' =B.AGE 　WHERE B.TSO=6 '
+	SET @i_Q = @i_Q + 1
+END	
+-------迴圈E
+WHILE @i_E <= 20
+Begin
+	SET @sql_E = @sql_E + 'E' + CAST(@i_E AS NVARCHAR) + ' = IF' + CAST(@i_E - 1 AS NVARCHAR) + ' * Q' + CAST(@i_E AS NVARCHAR) + ', '
+	SET @i_E = @i_E + 1
+END	
+
+
+--調整字串文字(有需要再填)	
+SET @sql_if = LEFT(@sql_if, LEN(@sql_if) - 1)
+SET @sql_D = LEFT(@sql_D, LEN(@sql_D) - 1)
+SET @sql_E = LEFT(@sql_E, LEN(@sql_E) - 1)
+
+--PRINT @sql
+
+EXEC sp_executesql @sql_if
+EXEC sp_executesql @sql_D
+EXEC sp_executesql @sql_Q
+EXEC sp_executesql @sql_E
+--==============================================================================迴圈更新IF、D、Q、E欄位數值(要一起跑)==============================================================================
+
+
+------------------------------------------------------------調整資料------------------------------------------------------------
+
+------刪除商品名稱特定文字
+UPDATE ##T SET pd = SUBSTRING(pd, 1, CHARINDEX('利率', pd) - 1)WHERE CHARINDEX('利率', pd) > 0 
+UPDATE ##T SET pd = SUBSTRING(pd, 1, CHARINDEX('美元', pd) - 1)WHERE CHARINDEX('美元', pd) > 0 
+UPDATE ##T SET pd = SUBSTRING(pd, 1, CHARINDEX('終身', pd) - 1)WHERE CHARINDEX('終身', pd) > 0 
+UPDATE ##T SET pd = SUBSTRING(pd, 1, CHARINDEX('人民幣', pd) - 1)WHERE CHARINDEX('人民幣', pd) > 0 
+UPDATE ##T SET pd = SUBSTRING(pd, 1, CHARINDEX('外幣', pd) - 1)WHERE CHARINDEX('外幣', pd) > 0 
+UPDATE ##T SET pd = SUBSTRING(pd, CHARINDEX('人壽', pd) + 2, LEN(pd)) WHERE CHARINDEX('人壽', pd) > 0; 
+------判斷商品類型
+UPDATE ##T SET TYP='金流' 
+UPDATE ##T SET TYP='中危額' WHERE crtable in (select crtable  from [PUBLICDB].[dbo].[舊二類] where exam_flag=2)
+--UPDATE ##T SET TYP='中危額' WHERE PD in ('享富增利','幸福世代定期壽險','美滿傳家','美滿傳富','添美好','美旺福','京愛您','起手式','致富傳家','八星報喜','傳世贏家','金美福','保倍','美承傳家','傳家福','金保倍','金美福','美利奇基','傳承守富','心保倍','龍保倍','合利安心','招財進保','美華保','傳富保','好基利','安鑫保','大基大利','金傳福','鑫華開','凱利美','大富人生','鑫華利','全家福','傳家保','傳鑫保','華利好行','華利真行' )
+--UPDATE ##T SET TYP='平準' WHERE PD in ('傳富一生','基業長傳','友保障','美好加成','ｅ同守護定期壽險','ｅ同守護五年定期壽險','揪享壽定期保險','新喜悅定期壽險','新喜福定期壽險附約','好喜悅定期壽險','好喜福定期壽險附約','定期壽險附約','新美鑫旺','超美鑫旺','鑫美傳富','鑫安利得','享福保','鑫美年年','多美鑫旺','傳富美','美心傳承','美利安心','美好傳家','基業長青','美金傳家','基業長鴻','美優傳家','多保倍','鑫福傳家','金美福保')
+
+UPDATE ##T SET TYP='年金' WHERE LEFT(PTYPE3,1)='A'
+UPDATE ##T SET TYP='萬能' WHERE PTYPE3='L210'
+
+UPDATE ##T SET TYP='增額' WHERE ( PTYPE3='L209' ) OR  (PTYPE3 = 'L305' AND pay_year=1 )
+UPDATE ##T SET TYP='還本' WHERE ( PTYPE3 ='L306')   OR  (PTYPE3 = 'L305' AND pay_year>1 )
+
+DROP table if exists #tw033,#tw001
+SELECT LEFT(ITEM,6) crtable_pay,SHORTDESC,RUNIT,PUNIT,WRESERVE01/RUNIT*10000 d1,WRESERVE10/RUNIT*10000 d10,WRESERVE20/RUNIT*10000 d20,WRESERVE30/RUNIT*10000 d30,WRESERVE35/RUNIT*10000 d35,WRESERVE50/RUNIT*10000 d50,WRESERVE50/RUNIT*10000 d60 into #tw033 FROM   ACDB.dbo.TW033 WHERE INFORMDESC LIKE '%M/40%' and  LEFT(ITEM,4) in (select crtable from  ##T where  ptype3='L209' )
+SELECT  LEFT(ITEM,6) crtable_pay,SHORTDESC,RUNIT,PUNIT,WRESERVE70/RUNIT/pUNIT*10000 m70  into #tw001 from ACDB.dbo.TW001 WHERE INFORMDESC LIKE '%M/40%'   
+update   ##T SET typ='平準' where  PTYPE3='L209' and   crtable+format(pay_year,'00') in (select  crtable_pay from  #tw033 where d1=10000 and d10=10000 and d20=10000 and  d30=10000 and d50=10000 and d60=10000) and    crtable+format(pay_year,'00') in (select  crtable_pay from  #tw001 where m70=10000)   
+update   ##T SET typ='遞減' where  PTYPE3='L209'  and   crtable+format(pay_year,'00') in (select  crtable_pay from  #tw033 where d50<d35) 
+UPDATE ##T SET TYP='小額' WHERE PD in ('ｅ國民小額','全民小額','公教小額','小額美')
+UPDATE ##T SET TYP='投資型' WHERE LEFT(ptype3,1)='U'
+DROP table if exists #tw033,#tw001
+
+
+
+---刪除健康險、團險
+DELETE FROM ##T WHERE PD IN ('真美利','真多利萬能壽險','心安御守','醫生守富','GO健康定期保險','鑫滿意保險','團體新全安鑫保險','團體全安鑫保險','加倍守護醫療','新鑫如意','醫卡幸福重大傷病保險','鑫如意','好福氣失能照護','福薪高照防癌定期保險','心安福失能照護','心安福殘廢照護') 
+DELETE FROM ##T WHERE TYP = '投資型'
+------------------------------------------------------------重新命名------------------------------------------------------------
+UPDATE ##T SET SRCEBUS='BK' WHERE SRCEBUS='OT'
+UPDATE ##T SET CH = '凱銀' WHERE  SRCEBUS='BK' AND CH IN ('凱基商業銀行股份有限公司','凱基商業銀行保險部')
+UPDATE ##T SET CH = '凱證' WHERE  SRCEBUS='BK' AND CH IN ('凱基保險經紀人股份有限公司','凱基人壽Ｃ轉Ｐ專案－保單歸','中國人壽Ｃ轉Ｐ專案－保單歸屬','客戶服務中心')
+
+------刪除經攬單位特定文字
+UPDATE ##T SET CH = SUBSTRING(CH, 1, CHARINDEX('保險經紀人', CH) - 1) WHERE SRCEBUS='BK' AND CHARINDEX('保險經紀人', CH) > 0
+UPDATE ##T SET CH = SUBSTRING(CH, 1, CHARINDEX('人身保險代理人', CH) - 1) WHERE SRCEBUS='BK' AND CHARINDEX('人身保險代理人', CH) > 0
+UPDATE ##T SET CH = SUBSTRING(CH, 1, CHARINDEX('保險代理人', CH) - 1) WHERE SRCEBUS='BK' AND CHARINDEX('保險代理人', CH) > 0
+UPDATE ##T SET CH = SUBSTRING(CH, 1, CHARINDEX('國際商業銀行', CH) - 1) WHERE SRCEBUS='BK' AND CHARINDEX('國際商業銀行', CH) > 0
+UPDATE ##T SET CH = SUBSTRING(CH, 1, CHARINDEX('商業銀行', CH) - 1) WHERE SRCEBUS='BK' AND CHARINDEX('商業銀行', CH) > 0
+------重新命名
+UPDATE ##T SET CH = '聯邦' WHERE  SRCEBUS='BK' AND CH like ('%聯邦%')  
+UPDATE ##T SET CH = '臺企' WHERE  SRCEBUS='BK' AND (CH like ('%臺企%') or   CH like ('%臺灣中小企業%') )
+UPDATE ##T SET CH = '華南' WHERE  SRCEBUS='BK' AND CH like ('%華南%')
+UPDATE ##T SET CH = '華泰' WHERE  SRCEBUS='BK' AND CH like ('%華泰%')
+UPDATE ##T SET CH = '一銀' WHERE  SRCEBUS='BK' AND CH like ('%第一%')
+UPDATE ##T SET CH = '合庫' WHERE  SRCEBUS='BK' AND CH like ('%合作金庫%')
+UPDATE ##T SET CH = '高雄銀' WHERE  SRCEBUS='BK' AND CH like ('%高雄%')  
+UPDATE ##T SET CH = '板信' WHERE  SRCEBUS='BK' AND CH like ('%板信%') 
+UPDATE ##T SET CH = '北富銀' WHERE  SRCEBUS='BK' AND CH like ('%台北富邦%') 
+UPDATE ##T SET CH = '京城' WHERE  SRCEBUS='BK' AND CH like ('%京城%')  
+UPDATE ##T SET CH = '兆豐' WHERE  SRCEBUS='BK' AND CH like ('%兆豐%')  
+UPDATE ##T SET CH = '玉山' WHERE  SRCEBUS='BK' AND CH like ('%玉山%')  
+UPDATE ##T SET CH = '永豐' WHERE  SRCEBUS='BK' AND CH like ('%永豐%')  
+UPDATE ##T SET CH = '台新' WHERE  SRCEBUS='BK' AND CH like ('%台新%')  
+UPDATE ##T SET CH = '元大' WHERE  SRCEBUS='BK' AND CH like ('%元大%')
+UPDATE ##T SET CH = '中信' WHERE  SRCEBUS='BK' AND CH like ('%中國信託%')  
+UPDATE ##T SET CH = '土銀' WHERE  SRCEBUS='BK' AND (CH like ('%土銀%')  OR CH like ('%土地%'))  
+UPDATE ##T SET CH = '上海' WHERE  SRCEBUS='BK' AND (CH like ('%上海%')  OR CH like ('%上銀%'))  
+UPDATE ##T SET CH = '三信' WHERE  SRCEBUS='BK' AND CH like ('%三信%')  
+UPDATE ##T SET CH = '遠東' WHERE  SRCEBUS='BK' AND CH like ('%遠東%')  
+UPDATE ##T SET CH = '彰銀' WHERE  SRCEBUS='BK' AND CH like ('%彰化%')  
+UPDATE ##T SET CH = '農金' WHERE  SRCEBUS='BK' AND CH like ('%農金%')
+
+------------------------------------------------------------FAC------------------------------------------------------------
+
+
+--串入所需FAC
+DROP TABLE IF EXISTS #FAC
+SELECT  CRTABLE+  RIGHT('0'+CAST(PAY_YEAR AS VARCHAR(2)),2) + RIGHT('0'+FORMAT(CAST(LIFEAGE+IIF(LIFESEX='F',100,0) AS INT),'X'),2) ITEM ,
+CHDRNUM,PD,LIFE,COVERAGE,CRTABLE,PAY_YEAR,LIFEAGE,LIFESEX INTO #FAC  FROM ##T 
+
+--==============================================================================迴圈加入FAC新欄位(DB、SB、PV、NAR)(要一起跑)==============================================================================
+Declare @sql_FAC NVARCHAR(MAX) = 'ALTER TABLE #FAC ADD '
+Declare @i_FAC INT
+-----------------------------------ADD 'DB'
+SET @i_FAC = 1
+WHILE @i_FAC <= 20
+Begin
+	SET @sql_FAC = @sql_FAC + 'DB' + CAST(@i_FAC AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i_FAC =@i_FAC + 1
+END
+	
+-----------------------------------ADD 'SB'
+SET @i_FAC = 1
+WHILE @i_FAC <= 20
+Begin
+	SET @sql_FAC = @sql_FAC + 'SB' + CAST(@i_FAC AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i_FAC =@i_FAC + 1
+END	
+
+-----------------------------------ADD 'PV'
+SET @i_FAC = 1
+WHILE @i_FAC <= 20
+Begin
+	SET @sql_FAC = @sql_FAC + 'PV' + CAST(@i_FAC AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i_FAC =@i_FAC + 1
+END	
+
+-----------------------------------ADD 'NAR'
+SET @i_FAC = 1
+WHILE @i_FAC <= 20
+Begin
+	SET @sql_FAC = @sql_FAC + 'NAR' + CAST(@i_FAC AS NVARCHAR) + ' DECIMAL(15, 5), '
+	SET @i_FAC =@i_FAC + 1
+END	
+	
+SET @sql_FAC = LEFT(@sql_FAC, LEN(@sql_FAC) - 1)
+EXEC sp_executesql @sql_FAC
+--==============================================================================迴圈加入FAC新欄位(DB、SB、PV、NAR)(要一起跑)==============================================================================
+
+UPDATE #FAC SET ITEM =left(CRTABLE+format(PAY_YEAR-LIFEAGE,'0')+ right(item,2) ,8) WHERE CRTABLE IN ('PW00','PW01','P8V0','PR00','55C2','55A3','PA00','55A4','55A5','55A6','55B1') OR pay_year>=50 OR LEFT(CRTABLE,2)='ZL'
+--------------------------------------------------------
+
+--==============================================================================迴圈計算FAC中 DB、SB、PV、NAR欄位數值(要一起跑)==============================================================================
+--原始CODE for DB: UPDATE #FAC SET Db1=B.wreserve01/runit/punit*10000 , Db2=B.wreserve02/runit/punit*10000, Db3=B.wreserve03/runit/punit*10000, Db4=B.wreserve04/runit/punit*10000, Db5=B.wreserve05/runit/punit*10000, Db6=B.wreserve06/runit/punit*10000, Db7=B.wreserve07/runit/punit*10000, Db8=B.wreserve08/runit/punit*10000, Db9=B.wreserve09/runit/punit*10000, Db10=B.wreserve10/runit/punit*10000, DB11=B.wreserve11/runit/punit*10000, DB12=B.wreserve12/runit/punit*10000, DB13=B.wreserve13/runit/punit*10000, DB14=B.wreserve14/runit/punit*10000, DB15=B.wreserve15/runit/punit*10000 FROM  #fac A INNER JOIN TZ087 B ON A.item = B.item 
+--原始CODE for DB 特定商品1: UPDATE #FAC SET Db1=B.wreserve01/runit*10000 , Db2=B.wreserve02/runit*10000, Db3=B.wreserve03/runit*10000, Db4=B.wreserve04/runit*10000, Db5=B.wreserve05/runit*10000, Db6=B.wreserve06/runit*10000, Db7=B.wreserve07/runit*10000, Db8=B.wreserve08/runit*10000, Db9=B.wreserve09/runit*10000, Db10=B.wreserve10/runit*10000, DB11=B.wreserve11/runit*10000, DB12=B.wreserve12/runit*10000, DB13=B.wreserve13/runit*10000, DB14=B.wreserve14/runit*10000, DB15=B.wreserve15/runit*10000  FROM  #fac A INNER JOIN TW033 B ON A.item = B.item  where crtable  in ('550C','NTRD','55D1')
+--原始CODE for DB 特定商品2: UPDATE #FAC SET Db1=B.wreserve01/runit*10000 , Db2=B.wreserve02/runit*10000, Db3=B.wreserve03/runit*10000, Db4=B.wreserve04/runit*10000, Db5=B.wreserve05/runit*10000, Db6=B.wreserve06/runit*10000, Db7=B.wreserve07/runit*10000, Db8=B.wreserve08/runit*10000, Db9=B.wreserve09/runit*10000, Db10=B.wreserve10/runit*10000, DB11=B.wreserve11/runit*10000, DB12=B.wreserve12/runit*10000, DB13=B.wreserve13/runit*10000, DB14=B.wreserve14/runit*10000, DB15=B.wreserve15/runit*10000  FROM  #fac A INNER JOIN TW033 B ON A.item = B.item  where crtable  in ('550C','NTRD','55D1')
+--原始CODE for SB 全部填0: UPDATE #FAC SET SB1=0, SB2=0, SB3=0, SB4=0, SB5=0, SB6=0, SB7=0, SB8=0, SB9=0, SB10=0, SB11=0, SB12=0, SB13=0, SB14=0, SB15=0
+--原始CODE for SB: UPDATE #FAC SET SB1=B.wreserve01/runit/punit*10000 , SB2=B.wreserve02/runit/punit*10000, SB3=B.wreserve03/runit/punit*10000, SB4=B.wreserve04/runit/punit*10000, SB5=B.wreserve05/runit/punit*10000, SB6=B.wreserve06/runit/punit*10000, SB7=B.wreserve07/runit/punit*10000, SB8=B.wreserve08/runit/punit*10000, SB9=B.wreserve09/runit/punit*10000, SB10=B.wreserve10/runit/punit*10000, SB11=B.wreserve11/runit/punit*10000, SB12=B.wreserve12/runit/punit*10000, SB13=B.wreserve13/runit/punit*10000, SB14=B.wreserve14/runit/punit*10000, SB15=B.wreserve15/runit/punit*10000 FROM  #fac A INNER JOIN TW001 B ON A.item = B.item 
+--原始CODE for PV: UPDATE #FAC SET pv1=B.wreserve01/runit/punit*10000 , pv2=B.wreserve02/runit/punit*10000, pv3=B.wreserve03/runit/punit*10000, pv4=B.wreserve04/runit/punit*10000, pv5=B.wreserve05/runit/punit*10000, pv6=B.wreserve06/runit/punit*10000, pv7=B.wreserve07/runit/punit*10000, pv8=B.wreserve08/runit/punit*10000, pv9=B.wreserve09/runit/punit*10000, pv10=B.wreserve10/runit/punit*10000, PV11=B.wreserve11/runit/punit*10000, PV12=B.wreserve12/runit/punit*10000, PV13=B.wreserve13/runit/punit*10000, PV14=B.wreserve14/runit/punit*10000, PV15=B.wreserve15/runit/punit*10000 FROM  #fac A INNER JOIN TW021 B ON A.item = B.item 
+--原始CODE for NAR: UPDATE #FAC SET NAR1=DB1-SB1-PV1, NAR2=DB2-SB2-PV2, NAR3=DB3-SB3-PV3, NAR4=DB4-SB4-PV4, NAR5=DB5-SB5-PV5, NAR6=DB6-SB6-PV6, NAR7=DB7-SB7-PV7, NAR8=DB8-SB8-PV8, NAR9=DB9-SB9-PV9, NAR10=DB10-SB10-PV10, NAR11=DB11-SB11-PV11, NAR12=DB12-SB12-PV12, NAR13=DB13-SB13-PV13, NAR14=DB14-SB14-PV14, NAR15=DB15-SB15-PV15
+
+
+--新增 字串(命名DB ->全部、DBspec1 -> 若TZ087抓不到數值，手KEY PLANCODE、DBspec2 -> 若TW033不分年齡)
+Declare @FAC_DB NVARCHAR(MAX) = 'UPDATE #FAC SET '
+Declare @FAC_DBspec1 NVARCHAR(MAX) = 'UPDATE #FAC SET '  --TZ087抓不到數值，改抓TW033數值
+Declare @FAC_DBspec2 NVARCHAR(MAX) = 'UPDATE #FAC SET '  --TW033無年齡區分，ex: 770206**
+Declare @FAC_SB0 NVARCHAR(MAX) = 'UPDATE #FAC SET '
+Declare @FAC_SB NVARCHAR(MAX) = 'UPDATE #FAC SET '
+Declare @FAC_PV NVARCHAR(MAX) = 'UPDATE #FAC SET '
+Declare @FAC_NAR NVARCHAR(MAX) = 'UPDATE #FAC SET '
+--新增 變數(命名DB ->全部、DBspec1 ->若TZ087抓不到數值，手KEY PLANCODE)
+Declare @i_FAC_DB INT
+Declare @i_FAC_DBspec1 INT
+Declare @i_FAC_DBspec2 INT
+Declare @i_FAC_SB0 INT
+Declare @i_FAC_SB INT
+Declare @i_FAC_PV INT
+Declare @i_FAC_NAR INT
+
+--迴圈計算 'DB'
+SET @i_FAC_DB = 1
+WHILE @i_FAC_DB <= 20
+Begin
+	SET @FAC_DB = @FAC_DB + 'DB' + CAST(@i_FAC_DB AS NVARCHAR)  + ' = B.wreserve' + RIGHT('00' + CAST(@i_FAC_DB AS NVARCHAR), 2) + '/runit/punit*10000, '
+	SET @i_FAC_DB =@i_FAC_DB + 1
+END	
+--迴圈計算 'DBspec1'(特定商品 TZ087抓不到數值)
+SET @i_FAC_DBspec1 = 1
+WHILE @i_FAC_DBspec1 <= 20
+Begin
+	SET @FAC_DBspec1 = @FAC_DBspec1 + 'DB' + CAST(@i_FAC_DBspec1 AS NVARCHAR)  + ' = B.wreserve' + RIGHT('00' + CAST(@i_FAC_DBspec1 AS NVARCHAR), 2) + '/runit*10000, '
+	SET @i_FAC_DBspec1 =@i_FAC_DBspec1 + 1
+END	
+--迴圈計算 'DBspec2'(特定商品 TW033不分年齡)
+SET @i_FAC_DBspec2 = 1
+WHILE @i_FAC_DBspec2 <= 20
+Begin
+	SET @FAC_DBspec2 = @FAC_DBspec2 + 'DB' + CAST(@i_FAC_DBspec2 AS NVARCHAR)  + ' = B.wreserve' + RIGHT('00' + CAST(@i_FAC_DBspec2 AS NVARCHAR), 2) + '/runit*10000, '
+	SET @i_FAC_DBspec2 =@i_FAC_DBspec2 + 1
+END	
+--迴圈設定 'SB'=0
+SET @i_FAC_SB0 = 1
+WHILE @i_FAC_SB0 <= 20
+Begin
+	SET @FAC_SB0 = @FAC_SB0 + 'SB' + CAST(@i_FAC_SB0 AS NVARCHAR)  + ' = 0, '
+	SET @i_FAC_SB0 =@i_FAC_SB0 + 1
+END	
+--迴圈計算 'SB'
+SET @i_FAC_SB = 1
+WHILE @i_FAC_SB <= 20
+Begin
+	SET @FAC_SB = @FAC_SB + 'SB' + CAST(@i_FAC_SB AS NVARCHAR)  + ' = B.wreserve' + RIGHT('00' + CAST(@i_FAC_SB AS NVARCHAR), 2) + '/runit/punit*10000, '
+	SET @i_FAC_SB =@i_FAC_SB + 1
+END	
+--迴圈計算 'PV'
+SET @i_FAC_PV = 1
+WHILE @i_FAC_PV <= 20
+Begin
+	SET @FAC_PV = @FAC_PV + 'PV' + CAST(@i_FAC_PV AS NVARCHAR)  + ' = B.wreserve' + RIGHT('00' + CAST(@i_FAC_PV AS NVARCHAR), 2) + '/runit/punit*10000, '
+	SET @i_FAC_PV =@i_FAC_PV + 1
+END	
+--迴圈計算 'NAR'
+SET @i_FAC_NAR = 1
+WHILE @i_FAC_NAR <= 20
+Begin
+	SET @FAC_NAR = @FAC_NAR + 'NAR' + CAST(@i_FAC_NAR AS NVARCHAR)  + ' = DB' + CAST(@i_FAC_NAR AS NVARCHAR)  + ' - SB' + CAST(@i_FAC_NAR AS NVARCHAR)  + ' - PV' + CAST(@i_FAC_NAR AS NVARCHAR)  + ', '
+	SET @i_FAC_NAR =@i_FAC_NAR + 1
+END	
+
+
+
+
+
+--調整字串文字(有需要再填)		
+SET @FAC_DB = LEFT(@FAC_DB, LEN(@FAC_DB) - 1) + ' FROM  #FAC A INNER JOIN TZ087 B ON A.item = B.item '
+SET @FAC_DBspec1 = LEFT(@FAC_DBspec1, LEN(@FAC_DBspec1) - 1) + '  FROM  #fac A INNER JOIN TW033 B ON A.item = B.item  where crtable  in (''550C'',''NTRD'',''55D1'',''P8W0'',''RVA1'',''8892'',''RUB3'',''RIB3'')'   ---這裡手KEY PLANCODE
+SET @FAC_DBspec2 = LEFT(@FAC_DBspec2, LEN(@FAC_DBspec2) - 1) + '  FROM  #fac A INNER JOIN TW033 B ON LEFT(A.item,6) = LEFT(B.item,6)  where crtable  in (''7702'')'   ---這裡手KEY PLANCODE
+SET @FAC_SB0 = LEFT(@FAC_SB0, LEN(@FAC_SB0) - 1)
+SET @FAC_SB = LEFT(@FAC_SB, LEN(@FAC_SB) - 1) + ' FROM  #fac A INNER JOIN TW001 B ON A.item = B.item '
+SET @FAC_PV = LEFT(@FAC_PV, LEN(@FAC_PV) - 1) + ' FROM  #FAC A INNER JOIN TW021 B ON A.item = B.item '
+SET @FAC_NAR = LEFT(@FAC_NAR, LEN(@FAC_NAR) - 1)
+
+EXEC sp_executesql @FAC_DB
+EXEC sp_executesql @FAC_DBspec1
+EXEC sp_executesql @FAC_DBspec2
+EXEC sp_executesql @FAC_SB0
+EXEC sp_executesql @FAC_SB
+EXEC sp_executesql @FAC_PV
+EXEC sp_executesql @FAC_NAR
+--==============================================================================迴圈計算FAC中 DB、SB、PV、NAR欄位數值(要一起跑)==============================================================================
+
+--==============================================================================迴圈計算T中NAR、ENAR、ANAR欄位數值(要一起跑)==============================================================================
+--原始CODE for NAR: UPDATE ##T SET NAR1=B.NAR1*SA/10000, NAR2=B.NAR2*SA/10000, NAR3=B.NAR3*SA/10000, NAR4=B.NAR4*SA/10000, NAR5=B.NAR5*SA/10000, NAR6=B.NAR6*SA/10000, NAR7=B.NAR7*SA/10000, NAR8=B.NAR8*SA/10000, NAR9=B.NAR9*SA/10000, NAR10=B.NAR10*SA/10000, NAR11=B.NAR11*SA/10000, NAR12=B.NAR12*SA/10000, NAR13=B.NAR13*SA/10000, NAR14=B.NAR14*SA/10000, NAR15=B.NAR15*SA/10000 FROM ##T A LEFT JOIN #FAC B ON A.CHDRNUM=B.CHDRNUM AND A.LIFE=B.LIFE AND A.COVERAGE=B.COVERAGE
+--原始CODE for ENAR、ANAR: UPDATE ##T SET ENAR1=NAR1*Q1*IF0, ENAR2=NAR2*Q2*IF1, ENAR3=NAR3*Q3*IF2, ENAR4=NAR4*Q4*IF3, ENAR5=NAR5*Q5*IF4, ENAR6=NAR6*Q6*IF5, ENAR7=NAR7*Q7*IF6, ENAR8=NAR8*Q8*IF7, ENAR9=NAR9*Q9*IF8, ENAR10=NAR10*Q10*IF9, ENAR11=NAR11*Q11*IF10, ENAR12=NAR12*Q12*IF11, ENAR13=NAR13*Q13*IF12, ENAR14=NAR14*Q14*IF13, ENAR15=NAR15*Q15*IF14, ANAR1=NAR1*D1,ANAR2=NAR2*D2 ,ANAR3=NAR3*D3,ANAR4=NAR4*D4,ANAR5=NAR5*D5,ANAR6=NAR6*D6, ANAR7=NAR7*D7, ANAR8=NAR8*D8, ANAR9=NAR9*D9, ANAR10=NAR10*D10, ANAR11=NAR11*D11, ANAR12=NAR12*D12, ANAR13=NAR13*D13, ANAR14=NAR14*D14, ANAR15=NAR15*D15 
+
+--新增 字串
+Declare @sql_NAR NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @sql_ENAR NVARCHAR(MAX) = 'UPDATE ##T SET '
+Declare @sql_ANAR NVARCHAR(MAX) = 'UPDATE ##T SET '
+--新增 變數
+Declare @i_NAR INT
+Declare @i_ENAR INT
+Declare @i_ANAR INT
+
+--迴圈計算NAR
+SET @i_NAR = 1
+WHILE @i_NAR <= 20
+Begin
+	SET @sql_NAR = @sql_NAR + 'NAR' + CAST(@i_NAR AS NVARCHAR)  + ' = B.NAR' + CAST(@i_NAR AS NVARCHAR)  + ' * SA/10000, '
+	SET @i_NAR =@i_NAR + 1
+END	
+--迴圈計算ENAR
+SET @i_ENAR = 1
+WHILE @i_ENAR <= 20
+Begin
+	SET @sql_ENAR = @sql_ENAR + 'ENAR' + CAST(@i_ENAR AS NVARCHAR)  + ' = NAR' + CAST(@i_ENAR AS NVARCHAR)  + ' * Q' + CAST(@i_ENAR AS NVARCHAR)  + ' * IF' + CAST(@i_ENAR - 1 AS NVARCHAR)  + ', '
+	SET @i_ENAR =@i_ENAR + 1
+END	
+--迴圈計算ANAR
+SET @i_ANAR = 1
+WHILE @i_ANAR <= 20
+Begin
+	SET @sql_ANAR = @sql_ANAR + 'ANAR' + CAST(@i_ANAR AS NVARCHAR)  + ' = NAR' + CAST(@i_ANAR AS NVARCHAR)  + ' * D' + CAST(@i_ANAR AS NVARCHAR)  + ', '
+	SET @i_ANAR =@i_ANAR + 1
+END	
+
+
+
+
+--調整字串文字(有需要再填)	
+SET @sql_NAR = LEFT(@sql_NAR, LEN(@sql_NAR) - 1) + ' FROM ##T A LEFT JOIN #FAC B ON A.CHDRNUM=B.CHDRNUM AND A.LIFE=B.LIFE AND A.COVERAGE=B.COVERAGE '
+SET @sql_ENAR = LEFT(@sql_ENAR, LEN(@sql_ENAR) - 1)
+SET @sql_ANAR = LEFT(@sql_ANAR, LEN(@sql_ANAR) - 1)
+
+EXEC sp_executesql @sql_NAR
+EXEC sp_executesql @sql_ENAR
+EXEC sp_executesql @sql_ANAR
+--==============================================================================迴圈計算T中NAR、ENAR、ANAR欄位數值(要一起跑)==============================================================================
+
+
+--刪除負危額的狀況(16歲以下會退保費的商品)
+DELETE FROM ##T WHERE NAR1<0 AND LIFEAGE<16
