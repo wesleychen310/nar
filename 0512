@@ -1,0 +1,5 @@
+幫我改一下這支
+select TYP,sum(IF0)IF0 ,  SUM(IF0)/SUM(SUM(IF0)) OVER() 件數比例 , SUM(P) P , SUM(P)/SUM(SUM(P)) OVER() 保費比例 ,SUM(D1) D1,SUM(ANAR1)/SUM(ENAR1) AE1, (SUM(ANAR1) + SUM(ANAR2) + SUM(ANAR3))/(SUM(ENAR1) + SUM(ENAR2) + SUM(ENAR3)) as AE_3y    FROM ##T WHERE  TYP in ('金流')  GROUP BY TYP ORDER BY 1
+
+我想要在做出 D1,D2,D3,AE1,AE2,AE2,AE3,AE4,AE5,AE_3Y
+你從我的CODE依樣畫葫蘆應該看得懂
