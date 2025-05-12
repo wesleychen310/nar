@@ -1,17 +1,1 @@
-SELECT
-  TYP,
-  SUM(IF0)                                                        AS IF0,
-  SUM(IF0)*1.0/NULLIF(SUM(SUM(IF0)) OVER(),0)                     AS 件數比例,
-  SUM(P)                                                          AS P,
-  SUM(P)*1.0/NULLIF(SUM(SUM(P)) OVER(),0)                         AS 保費比例,
-  SUM(D1)                                                         AS D1, SUM(D2) AS D2, SUM(D3) AS D3,
-  SUM(ANAR1)*1.0/NULLIF(SUM(ENAR1),0)                              AS AE1,
-  SUM(ANAR2)*1.0/NULLIF(SUM(ENAR2),0)                              AS AE2,
-  SUM(ANAR3)*1.0/NULLIF(SUM(ENAR3),0)                              AS AE3,
-  SUM(ANAR4)*1.0/NULLIF(SUM(ENAR4),0)                              AS AE4,
-  SUM(ANAR5)*1.0/NULLIF(SUM(ENAR5),0)                              AS AE5,
-  (SUM(ANAR1)+SUM(ANAR2)+SUM(ANAR3))*1.0/NULLIF((SUM(ENAR1)+SUM(ENAR2)+SUM(ENAR3)),0) AS AE_3Y
-FROM ##T
-WHERE TYP = '金流'
-GROUP BY TYP
-ORDER BY TYP;
+SELECT TYP, SUM(IF0) IF0, SUM(IF0)*1.0/NULLIF(SUM(SUM(IF0)) OVER(),0) 件數比例, SUM(P) P, SUM(P)*1.0/NULLIF(SUM(SUM(P)) OVER(),0) 保費比例, SUM(D1) D1, SUM(D2) D2, SUM(D3) D3, SUM(ANAR1)*1.0/NULLIF(SUM(ENAR1),0) AE1, SUM(ANAR2)*1.0/NULLIF(SUM(ENAR2),0) AE2, SUM(ANAR3)*1.0/NULLIF(SUM(ENAR3),0) AE3, SUM(ANAR4)*1.0/NULLIF(SUM(ENAR4),0) AE4, SUM(ANAR5)*1.0/NULLIF(SUM(ENAR5),0) AE5, (SUM(ANAR1)+SUM(ANAR2)+SUM(ANAR3))*1.0/NULLIF(SUM(ENAR1)+SUM(ENAR2)+SUM(ENAR3),0) AE_3Y FROM ##T WHERE TYP='金流' GROUP BY TYP ORDER BY TYP;
