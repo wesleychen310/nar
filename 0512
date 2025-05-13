@@ -1,3 +1,45 @@
+DECLARE @yyyymm INT = 202503,
+        @year   INT,
+        @month  INT,
+        @sql    NVARCHAR(MAX);
+
+WHILE @yyyymm >= 201801
+BEGIN
+    SET @year  = @yyyymm / 100;
+    SET @month = @yyyymm % 100;
+
+    SET @sql = N'
+    UPDATE ##R
+      SET REI_FLAG = 1
+    WHERE REI_FLAG = 0
+      AND STATCODE <> ''IF''
+      AND RACHDRNUM IN (
+        SELECT RACHDRNUM
+          FROM [' + CAST(@year AS CHAR(4)) + '].[dbo].[ACDB_RARN_' + CAST(@yyyymm AS CHAR(6)) + ']
+         WHERE SSREAST > 0
+      );';
+
+    -- 可先用 PRINT 來檢視動態 SQL，再改用 EXEC 執行
+    PRINT @sql;
+    EXEC sp_executesql @sql;
+
+    -- 計算下一個月：若是 1 月就轉到前一年的 12 月，否則月數減 1
+    IF @month = 1
+        SET @yyyymm = (@year - 1) * 100 + 12;
+    ELSE
+        SET @yyyymm = @yyyymm - 1;
+END
+
+
+
+
+
+
+
+8888888888888
+
+
+
 幫我用迴圈寫
 我要從 202503一路按月更新到201801
 維持簡潔 橫式的寫法
